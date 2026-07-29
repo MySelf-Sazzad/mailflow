@@ -42,13 +42,13 @@ async function main() {
   ];
 
   for (const plan of plans) {
-    await prisma.plan.upsert({ where: { slug: plan.slug }, update: plan, create: plan });
+    await prisma.plan.upsert({ where: { slug: plan.slug }, update: {}, create: plan });
   }
 
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@example.com";
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
 
-  const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
+  const existingAdmin = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN", deletedAt: null } });
   if (!existingAdmin) {
     await prisma.user.create({
       data: {
