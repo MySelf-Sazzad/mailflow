@@ -23,20 +23,21 @@ export function SplitVisual() {
       {/* Connecting paths + individual sends */}
       <svg
         className="absolute inset-0 h-full w-full"
-        viewBox="0 0 400 340"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
         fill="none"
         aria-hidden="true"
       >
-        <path d="M 150 170 C 220 60, 260 40, 340 34" stroke="#CBD5E1" strokeWidth="1.5" strokeDasharray="4 5" />
-        <path d="M 150 170 C 220 170, 260 170, 340 170" stroke="#CBD5E1" strokeWidth="1.5" strokeDasharray="4 5" />
-        <path d="M 150 170 C 220 280, 260 300, 340 306" stroke="#CBD5E1" strokeWidth="1.5" strokeDasharray="4 5" />
+        <path d="M 36 50 C 48 18, 57 6, 68 6" vectorEffect="non-scaling-stroke" stroke="#CBD5E1" strokeWidth="1.5" strokeDasharray="4 5" />
+        <path d="M 36 50 C 48 50, 57 38, 68 38" vectorEffect="non-scaling-stroke" stroke="#CBD5E1" strokeWidth="1.5" strokeDasharray="4 5" />
+        <path d="M 36 50 C 48 70, 57 70, 68 70" vectorEffect="non-scaling-stroke" stroke="#CBD5E1" strokeWidth="1.5" strokeDasharray="4 5" />
       </svg>
 
-      {recipients.map((r, i) => (
+      {recipients.map((r) => (
         <div
           key={r.name}
           className="absolute right-0 flex w-36 -translate-y-1/2 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-md"
-          style={{ top: r.top, animation: `float 5s ease-in-out ${i * 0.4}s infinite` }}
+          style={{ top: r.top }}
         >
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-purple to-brand-cyan text-[10px] font-semibold text-white">
             {r.name.split(" ").map((p) => p[0]).join("")}
@@ -48,15 +49,6 @@ export function SplitVisual() {
         </div>
       ))}
 
-      <style>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(-50%); }
-          50% { transform: translateY(calc(-50% - 6px)); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          [style*="animation"] { animation: none !important; }
-        }
-      `}</style>
     </div>
   );
 }
