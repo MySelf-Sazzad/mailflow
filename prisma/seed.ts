@@ -45,6 +45,9 @@ async function main() {
     await prisma.plan.upsert({ where: { slug: plan.slug }, update: {}, create: plan });
   }
 
+  if (process.env.VERCEL && (!process.env.SEED_ADMIN_EMAIL || !process.env.SEED_ADMIN_PASSWORD)) {
+    throw new Error("SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD are required for the first Vercel deployment.");
+  }
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@example.com";
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
 
