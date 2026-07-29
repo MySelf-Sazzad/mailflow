@@ -6,7 +6,8 @@ export const metadata: Metadata = {
   description:
     "Create campaigns, manage contacts, attach files, schedule delivery, and track performance from one powerful email platform. Every recipient gets their own email.",
   icons: {
-    icon: "/brand/mailflow-logo.png",
+    icon: [{ url: "/brand/mailflow-logo.png", type: "image/png" }],
+    shortcut: "/brand/mailflow-logo.png",
     apple: "/brand/mailflow-logo.png",
   },
 };
