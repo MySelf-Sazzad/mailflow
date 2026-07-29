@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="mailflow-blue" x1="8" y1="12" x2="56" y2="52" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563eb"/>
+      <stop offset="0.55" stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+  <path d="M5 25h16M2 32h17M7 39h14" fill="none" stroke="url(#mailflow-blue)" stroke-width="5" stroke-linecap="round"/>
+  <rect x="19" y="13" width="40" height="38" rx="9" fill="url(#mailflow-blue)"/>
+  <rect x="24" y="19" width="30" height="26" rx="5" fill="white"/>
+  <path d="m25 21 14 12 14-12" fill="none" stroke="url(#mailflow-blue)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m25 43 10-10m18 10L43 33" fill="none" stroke="#dbeafe" stroke-width="2.5" stroke-linecap="round"/>
+</svg>
