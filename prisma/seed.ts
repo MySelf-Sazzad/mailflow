@@ -51,26 +51,28 @@ async function main() {
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@example.com";
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
 
-  const existingAdmin = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN", deletedAt: null } });
-  if (existingAdmin?.email === "admin@example.com" && process.env.SEED_ADMIN_EMAIL && process.env.SEED_ADMIN_PASSWORD) {
-    await prisma.user.update({
-      where: { id: existingAdmin.id },
-      data: { email: adminEmail, passwordHash: await bcrypt.hash(adminPassword, 12) },
-    });
-    console.log(`Replaced the development admin with the configured production administrator: ${adminEmail}`);
-  } else if (!existingAdmin) {
-    await prisma.user.create({
-      data: {
-        fullName: "Super Admin",
-        email: adminEmail,
-        passwordHash: await bcrypt.hash(adminPassword, 12),
-        role: "SUPER_ADMIN",
-        status: "ACTIVE",
-        emailVerified: new Date(),
-      },
-    });
-    console.log(`Seeded super admin: ${adminEmail} (change SEED_ADMIN_PASSWORD before real use)`);
-  }
+  const passwordHash = await bcrypt.hash(adminPassword, 12);
+  await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: {
+      passwordHash,
+      role: "SUPER_ADMIN",
+      status: "ACTIVE",
+      emailVerified: new Date(),
+      deletedAt: null,
+      failedLoginCount: 0,
+      lockedUntil: null,
+    },
+    create: {
+      fullName: "Super Admin",
+      email: adminEmail,
+      passwordHash,
+      role: "SUPER_ADMIN",
+      status: "ACTIVE",
+      emailVerified: new Date(),
+    },
+  });
+  console.log(`Production administrator synchronized: ${adminEmail}`);
 
   const systemTemplates = [
     {

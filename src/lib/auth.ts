@@ -1,10 +1,16 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
+const authSecret = process.env.AUTH_SECRET
+  ?? process.env.NEXTAUTH_SECRET
+  ?? (process.env.DATABASE_URL
+    ? createHash("sha256").update(`mailflow:${process.env.DATABASE_URL}`).digest("hex")
+    : "mailflow-local-development-secret-change-before-production");
 
 async function authorizeCredentials(
   credentials: Partial<Record<"email" | "password", unknown>> | undefined,
@@ -18,11 +24,11 @@ async function authorizeCredentials(
   if (!user || (adminOnly && user.role !== "SUPER_ADMIN")) return null;
 
   if (user.lockedUntil && user.lockedUntil > new Date()) {
-    throw new Error("ACCOUNT_LOCKED");
+    return null;
   }
 
   if (user.status === "SUSPENDED" || user.status === "BLOCKED") {
-    throw new Error("ACCOUNT_DISABLED");
+    return null;
   }
 
   const valid = await verifyPassword(password, user.passwordHash);
@@ -41,7 +47,7 @@ async function authorizeCredentials(
     return null;
   }
 
-  if (!user.emailVerified) throw new Error("EMAIL_NOT_VERIFIED");
+  if (!user.emailVerified) return null;
 
   await prisma.user.update({
     where: { id: user.id },
@@ -53,7 +59,7 @@ async function authorizeCredentials(
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
-  secret: process.env.AUTH_SECRET,
+  secret: authSecret,
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",
