@@ -1,0 +1,645 @@
+// MailFlow — Database Schema (Phase 1 core models)
+// Run `npx prisma generate` then `npx prisma migrate dev --name init` once DATABASE_URL is set.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────
+// Auth / Users
+// ─────────────────────────────────────────────────────────────
+
+enum UserRole {
+  USER
+  TEAM_ADMIN
+  SUPER_ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+  PENDING_VERIFICATION
+}
+
+model User {
+  id                String        @id @default(cuid())
+  fullName          String
+  email             String        @unique
+  passwordHash      String
+  companyName       String?
+  country           String?
+  timeZone          String        @default("UTC")
+  role              UserRole      @default(USER)
+  status            AccountStatus @default(PENDING_VERIFICATION)
+  emailVerified     DateTime?
+  twoFactorEnabled  Boolean       @default(false)
+  twoFactorSecret   String?
+  failedLoginCount  Int           @default(0)
+  lockedUntil       DateTime?
+  accountHealth     Int           @default(100)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  sessions          Session[]
+  emailVerifications EmailVerificationToken[]
+  passwordResets    PasswordResetToken[]
+  subscription      Subscription?
+  contacts          Contact[]
+  contactLists      ContactList[]
+  campaigns         Campaign[]
+  templates         EmailTemplate[]
+  files             FileAsset[]
+  apiKeys           ApiKey[]
+  notifications     Notification[]
+  supportTickets    SupportTicket[]
+  auditLogs         AuditLog[]
+  teamMemberships   TeamMember[]  @relation("TeamMemberUser")
+  sentInvitations   TeamInvitation[] @relation("InvitedBy")
+  senderIdentities  SenderIdentity[]
+  sendingDomains    SendingDomain[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionToken String   @unique
+  ipAddress    String?
+  userAgent    String?
+  device       String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// Plans / Subscriptions / Billing
+// ─────────────────────────────────────────────────────────────
+
+model Plan {
+  id                    String   @id @default(cuid())
+  slug                  String   @unique // free | starter | professional | business
+  name                  String
+  description           String?
+  monthlyPriceCents     Int
+  annualPriceCents      Int
+  currency              String   @default("USD")
+  recipientsPerCampaign Int
+  emailsPerDay          Int
+  emailsPerMonth        Int
+  contactLimit          Int
+  storageLimitMb        Int
+  attachmentLimitMb     Int
+  templateLimit         Int
+  teamMemberLimit       Int
+  apiAccess             Boolean  @default(false)
+  analyticsAccess       Boolean  @default(true)
+  brandingRemoval       Boolean  @default(false)
+  customDomainAccess    Boolean  @default(false)
+  isActive              Boolean  @default(true)
+  isFeatured            Boolean  @default(false)
+  sortOrder             Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+  SUSPENDED
+}
+
+enum BillingInterval {
+  MONTHLY
+  ANNUAL
+}
+
+model Subscription {
+  id                String             @id @default(cuid())
+  userId            String             @unique
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId            String
+  plan              Plan               @relation(fields: [planId], references: [id])
+  status            SubscriptionStatus @default(TRIAL)
+  billingInterval    BillingInterval    @default(MONTHLY)
+  currentPeriodStart DateTime           @default(now())
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd Boolean            @default(false)
+  gracePeriodEndsAt DateTime?
+  emailsSentToday   Int                @default(0)
+  emailsSentThisMonth Int              @default(0)
+  usageResetAt      DateTime           @default(now())
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  payments Payment[]
+  invoices Invoice[]
+}
+
+enum PaymentProvider {
+  STRIPE
+  PADDLE
+  SSLCOMMERZ
+  BKASH
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id             String          @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription    @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  provider       PaymentProvider
+  providerRef    String?
+  amountCents    Int
+  currency       String
+  status         PaymentStatus   @default(PENDING)
+  createdAt      DateTime        @default(now())
+}
+
+model Invoice {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  invoiceNumber  String       @unique
+  amountCents    Int
+  currency       String
+  pdfUrl         String?
+  issuedAt       DateTime     @default(now())
+}
+
+model Coupon {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  percentOff     Int?
+  amountOffCents Int?
+  maxRedemptions Int?
+  timesRedeemed  Int      @default(0)
+  expiresAt      DateTime?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// Contacts
+// ─────────────────────────────────────────────────────────────
+
+enum ContactStatus {
+  SUBSCRIBED
+  UNSUBSCRIBED
+  BOUNCED
+  BLOCKED
+}
+
+model Contact {
+  id                String        @id @default(cuid())
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName         String?
+  lastName          String?
+  email             String
+  phone             String?
+  company            String?
+  position          String?
+  country           String?
+  tags              String[]      @default([])
+  notes             String?
+  status            ContactStatus @default(SUBSCRIBED)
+  lastContactedAt   DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  listMemberships   ContactListMember[]
+  campaignRecipients CampaignRecipient[]
+
+  @@unique([userId, email])
+  @@index([userId])
+  @@index([status])
+}
+
+model ContactList {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+
+  members ContactListMember[]
+
+  @@index([userId])
+}
+
+model ContactListMember {
+  id            String      @id @default(cuid())
+  contactListId String
+  contactList   ContactList @relation(fields: [contactListId], references: [id], onDelete: Cascade)
+  contactId     String
+  contact       Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  addedAt       DateTime    @default(now())
+
+  @@unique([contactListId, contactId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Templates
+// ─────────────────────────────────────────────────────────────
+
+model EmailTemplate {
+  id          String   @id @default(cuid())
+  userId      String?  // null = system template
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  category    String
+  htmlContent String
+  isSystem    Boolean  @default(false)
+  isFavorite  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([category])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Campaigns
+// ─────────────────────────────────────────────────────────────
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  QUEUED
+  PROCESSING
+  PAUSED
+  COMPLETED
+  PARTIALLY_COMPLETED
+  CANCELLED
+  FAILED
+}
+
+model Campaign {
+  id                String         @id @default(cuid())
+  userId            String
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
+  subject           String
+  previewText       String?
+  senderName        String
+  senderEmail       String
+  replyToEmail      String?
+  category          String?
+  htmlContent       String
+  plainTextContent  String?
+  status            CampaignStatus @default(DRAFT)
+  recipientCount    Int            @default(0)
+  sentCount         Int            @default(0)
+  deliveredCount    Int            @default(0)
+  openCount         Int            @default(0)
+  clickCount        Int            @default(0)
+  bounceCount       Int            @default(0)
+  failureCount      Int            @default(0)
+  unsubscribeCount  Int            @default(0)
+  scheduledAt       DateTime?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  deletedAt         DateTime?
+
+  recipients  CampaignRecipient[]
+  attachments CampaignAttachment[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum RecipientStatus {
+  PENDING
+  QUEUED
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  COMPLAINED
+  FAILED
+  UNSUBSCRIBED
+}
+
+model CampaignRecipient {
+  id                  String          @id @default(cuid())
+  campaignId          String
+  campaign            Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId           String?
+  contact             Contact?        @relation(fields: [contactId], references: [id])
+  recipientEmail      String
+  personalizedSubject String?
+  providerMessageId   String?
+  status              RecipientStatus @default(PENDING)
+  errorMessage        String?
+  sentAt              DateTime?
+  deliveredAt         DateTime?
+  openedAt            DateTime?
+  clickedAt           DateTime?
+  bouncedAt           DateTime?
+  unsubscribedAt      DateTime?
+  createdAt           DateTime        @default(now())
+
+  events EmailEvent[]
+
+  @@index([campaignId])
+  @@index([status])
+  @@index([recipientEmail])
+}
+
+enum EmailEventType {
+  ACCEPTED
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  SOFT_BOUNCED
+  HARD_BOUNCED
+  COMPLAINED
+  REJECTED
+  UNSUBSCRIBED
+}
+
+model EmailEvent {
+  id                  String            @id @default(cuid())
+  campaignRecipientId String
+  campaignRecipient   CampaignRecipient @relation(fields: [campaignRecipientId], references: [id], onDelete: Cascade)
+  type                EmailEventType
+  providerEventId     String?           @unique
+  metadata            Json?
+  createdAt           DateTime          @default(now())
+
+  @@index([campaignRecipientId])
+}
+
+model CampaignAttachment {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  fileAssetId String
+  fileAsset  FileAsset @relation(fields: [fileAssetId], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model FileAsset {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String
+  storageUrl   String
+  createdAt    DateTime @default(now())
+
+  campaignAttachments CampaignAttachment[]
+
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Suppression / Unsubscribes / Bounces / Complaints
+// ─────────────────────────────────────────────────────────────
+
+enum SuppressionReason {
+  UNSUBSCRIBED
+  HARD_BOUNCE
+  COMPLAINT
+  MANUAL_BLOCK
+}
+
+model SuppressionEntry {
+  id        String            @id @default(cuid())
+  userId    String
+  email     String
+  reason    SuppressionReason
+  createdAt DateTime          @default(now())
+
+  @@unique([userId, email])
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Sender identities / domains
+// ─────────────────────────────────────────────────────────────
+
+model SenderIdentity {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromName    String
+  fromEmail   String
+  isVerified  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model SendingDomain {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domain        String
+  spfVerified   Boolean  @default(false)
+  dkimVerified  Boolean  @default(false)
+  dmarcVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// API / Webhooks
+// ─────────────────────────────────────────────────────────────
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      String
+  keyHash    String    @unique
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Team
+// ─────────────────────────────────────────────────────────────
+
+enum TeamRole {
+  OWNER
+  ADMINISTRATOR
+  MANAGER
+  EDITOR
+  VIEWER
+}
+
+model TeamMember {
+  id         String   @id @default(cuid())
+  ownerUserId String  // account owner this team belongs to
+  userId     String
+  user       User     @relation("TeamMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  role       TeamRole @default(VIEWER)
+  createdAt  DateTime @default(now())
+
+  @@unique([ownerUserId, userId])
+}
+
+model TeamInvitation {
+  id          String   @id @default(cuid())
+  ownerUserId String
+  invitedById String
+  invitedBy   User     @relation("InvitedBy", fields: [invitedById], references: [id])
+  email       String
+  role        TeamRole @default(VIEWER)
+  token       String   @unique
+  acceptedAt  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// Notifications / Support / Audit
+// ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  message   String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_USER
+  RESOLVED
+  CLOSED
+}
+
+model SupportTicket {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject   String
+  category  String
+  priority  String
+  status    TicketStatus @default(OPEN)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  replies TicketReply[]
+}
+
+model TicketReply {
+  id         String        @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String
+  message    String
+  isInternal Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  action    String
+  targetType String?
+  targetId   String?
+  metadata  Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Site / Admin settings
+// ─────────────────────────────────────────────────────────────
+
+model SiteSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// Queue jobs (mirrors BullMQ jobs for auditability; BullMQ/Redis is
+// the actual execution queue — this table is a durable record)
+// ─────────────────────────────────────────────────────────────
+
+enum QueueJobStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  FAILED
+  DEAD_LETTER
+}
+
+model QueueJob {
+  id         String         @id @default(cuid())
+  jobType    String
+  payload    Json
+  status     QueueJobStatus @default(PENDING)
+  attempts   Int            @default(0)
+  maxAttempts Int           @default(5)
+  lastError  String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}

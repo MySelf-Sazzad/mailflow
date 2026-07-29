@@ -1,0 +1,11 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mailflow
+    ports: ["5432:5432"]
+    volumes: ["mailflow_postgres:/var/lib/postgresql/data"]
+volumes:
+  mailflow_postgres:

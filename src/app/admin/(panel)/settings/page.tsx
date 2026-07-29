@@ -1,0 +1,2 @@
+import { auth } from "@/lib/auth";import { AdminCredentialForm } from "@/components/admin/AdminCredentialForm";
+export default async function AdminSettings(){const session=await auth();return <div className="space-y-6"><div><p className="text-sm font-semibold text-brand-indigo">SECURITY SETTINGS</p><h1 className="page-title mt-1">Administrator settings</h1><p className="page-subtitle">Change the protected administrator email and password.</p></div><AdminCredentialForm email={session!.user.email??""}/></div>}

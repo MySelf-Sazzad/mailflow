@@ -1,0 +1,3 @@
+"use client";
+import { useEffect, useState } from "react";import { useRouter } from "next/navigation";
+export function AdminAutoRefresh(){const router=useRouter();const [seconds,setSeconds]=useState(10);useEffect(()=>{const tick=setInterval(()=>setSeconds(s=>s<=1?10:s-1),1000);const refresh=setInterval(()=>router.refresh(),10000);return()=>{clearInterval(tick);clearInterval(refresh)}},[router]);return <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"><i className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"/>Live · {seconds}s</span>}
