@@ -52,7 +52,13 @@ async function main() {
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
 
   const existingAdmin = await prisma.user.findFirst({ where: { role: "SUPER_ADMIN", deletedAt: null } });
-  if (!existingAdmin) {
+  if (existingAdmin?.email === "admin@example.com" && process.env.SEED_ADMIN_EMAIL && process.env.SEED_ADMIN_PASSWORD) {
+    await prisma.user.update({
+      where: { id: existingAdmin.id },
+      data: { email: adminEmail, passwordHash: await bcrypt.hash(adminPassword, 12) },
+    });
+    console.log(`Replaced the development admin with the configured production administrator: ${adminEmail}`);
+  } else if (!existingAdmin) {
     await prisma.user.create({
       data: {
         fullName: "Super Admin",
