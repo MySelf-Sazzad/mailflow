@@ -8,6 +8,7 @@ import { sendVerificationEmail } from "@/services/email/transactional";
 const VERIFICATION_TOKEN_TTL_HOURS = 24;
 
 export async function POST(req: NextRequest) {
+  const requireEmailVerification = process.env.REQUIRE_EMAIL_VERIFICATION === "true";
   const body = await req.json().catch(() => null);
   if (!body) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
@@ -49,7 +50,8 @@ export async function POST(req: NextRequest) {
       passwordHash,
       companyName,
       country,
-      status: "PENDING_VERIFICATION",
+      status: requireEmailVerification ? "PENDING_VERIFICATION" : "ACTIVE",
+      emailVerified: requireEmailVerification ? null : new Date(),
       subscription: {
         create: {
           planId: freePlan.id,
@@ -60,16 +62,18 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  const token = crypto.randomBytes(32).toString("hex");
-  await prisma.emailVerificationToken.create({
-    data: {
-      userId: user.id,
-      token,
-      expiresAt: new Date(Date.now() + VERIFICATION_TOKEN_TTL_HOURS * 60 * 60 * 1000),
-    },
-  });
-
-  await sendVerificationEmail(user.email, user.fullName, token);
+  let token: string | null = null;
+  if (requireEmailVerification) {
+    token = crypto.randomBytes(32).toString("hex");
+    await prisma.emailVerificationToken.create({
+      data: {
+        userId: user.id,
+        token,
+        expiresAt: new Date(Date.now() + VERIFICATION_TOKEN_TTL_HOURS * 60 * 60 * 1000),
+      },
+    });
+    await sendVerificationEmail(user.email, user.fullName, token);
+  }
 
   await prisma.auditLog.create({
     data: { actorId: user.id, action: "USER_REGISTERED" },
@@ -77,9 +81,10 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     success: true,
+    autoVerified: !requireEmailVerification,
     // Local mode cannot deliver to a real inbox. Returning the link only in
     // development keeps onboarding usable without weakening production.
-    verificationUrl: (process.env.EMAIL_PROVIDER ?? "local") === "local"
+    verificationUrl: token && (process.env.EMAIL_PROVIDER ?? "local") === "local"
       ? `${process.env.APP_URL ?? "http://localhost:3000"}/verify-email?token=${token}`
       : undefined,
   }, { status: 201 });

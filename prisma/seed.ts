@@ -74,6 +74,14 @@ async function main() {
   });
   console.log(`Production administrator synchronized: ${adminEmail}`);
 
+  if (process.env.REQUIRE_EMAIL_VERIFICATION !== "true") {
+    const activated = await prisma.user.updateMany({
+      where: { status: "PENDING_VERIFICATION", emailVerified: null },
+      data: { status: "ACTIVE", emailVerified: new Date(), failedLoginCount: 0, lockedUntil: null },
+    });
+    console.log(`Activated ${activated.count} pending account(s) for beta mode.`);
+  }
+
   const systemTemplates = [
     {
       name: "Simple Welcome Email",

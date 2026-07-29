@@ -11,6 +11,7 @@ export default function RegisterPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [verificationUrl, setVerificationUrl] = useState<string | null>(null);
+  const [autoVerified, setAutoVerified] = useState(false);
 
   const {
     register,
@@ -29,12 +30,26 @@ export default function RegisterPage() {
     if (res.ok) {
       const data = await res.json();
       setVerificationUrl(data.verificationUrl ?? null);
+      setAutoVerified(Boolean(data.autoVerified));
       setSubmitted(true);
       return;
     }
 
     const data = await res.json().catch(() => null);
     setServerError(data?.error ?? "Something went wrong. Please try again.");
+  }
+
+  if (submitted && autoVerified) {
+    return (
+      <AuthShell title="Account created">
+        <p className="text-sm text-slate-600">
+          Your account is active. You can log in now using the email address and password you just created.
+        </p>
+        <Link href="/login" className="mt-6 inline-block text-sm font-semibold text-brand-indigo">
+          Continue to log in
+        </Link>
+      </AuthShell>
+    );
   }
 
   if (submitted) {
