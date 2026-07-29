@@ -6,6 +6,51 @@ import { verifyPassword } from "@/lib/password";
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
+async function authorizeCredentials(
+  credentials: Partial<Record<"email" | "password", unknown>> | undefined,
+  adminOnly = false,
+) {
+  const email = String(credentials?.email ?? "").toLowerCase().trim();
+  const password = String(credentials?.password ?? "");
+  if (!email || !password) return null;
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user || (adminOnly && user.role !== "SUPER_ADMIN")) return null;
+
+  if (user.lockedUntil && user.lockedUntil > new Date()) {
+    throw new Error("ACCOUNT_LOCKED");
+  }
+
+  if (user.status === "SUSPENDED" || user.status === "BLOCKED") {
+    throw new Error("ACCOUNT_DISABLED");
+  }
+
+  const valid = await verifyPassword(password, user.passwordHash);
+  if (!valid) {
+    const failedLoginCount = user.failedLoginCount + 1;
+    const shouldLock = failedLoginCount >= MAX_FAILED_ATTEMPTS;
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        failedLoginCount,
+        lockedUntil: shouldLock
+          ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000)
+          : null,
+      },
+    });
+    return null;
+  }
+
+  if (!user.emailVerified) throw new Error("EMAIL_NOT_VERIFIED");
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { failedLoginCount: 0, lockedUntil: null },
+  });
+
+  return { id: user.id, email: user.email, name: user.fullName, role: user.role };
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
   secret: process.env.AUTH_SECRET,
@@ -15,60 +60,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   providers: [
     Credentials({
+      id: "credentials",
       name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email = String(credentials?.email ?? "").toLowerCase().trim();
-        const password = String(credentials?.password ?? "");
-        if (!email || !password) return null;
-
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user) return null;
-
-        // Account lockout after repeated failed attempts.
-        if (user.lockedUntil && user.lockedUntil > new Date()) {
-          throw new Error("ACCOUNT_LOCKED");
-        }
-
-        if (user.status === "SUSPENDED" || user.status === "BLOCKED") {
-          throw new Error("ACCOUNT_DISABLED");
-        }
-
-        const valid = await verifyPassword(password, user.passwordHash);
-
-        if (!valid) {
-          const failedLoginCount = user.failedLoginCount + 1;
-          const shouldLock = failedLoginCount >= MAX_FAILED_ATTEMPTS;
-          await prisma.user.update({
-            where: { id: user.id },
-            data: {
-              failedLoginCount,
-              lockedUntil: shouldLock
-                ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000)
-                : null,
-            },
-          });
-          return null;
-        }
-
-        if (!user.emailVerified) {
-          throw new Error("EMAIL_NOT_VERIFIED");
-        }
-
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { failedLoginCount: 0, lockedUntil: null },
-        });
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.fullName,
-          role: user.role,
-        };
+        return authorizeCredentials(credentials);
+      },
+    }),
+    Credentials({
+      id: "admin-credentials",
+      name: "admin-credentials",
+      credentials: {
+        email: { label: "Admin email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        return authorizeCredentials(credentials, true);
       },
     }),
   ],

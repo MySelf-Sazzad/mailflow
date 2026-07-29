@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn, signOut } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema, type LoginInput } from "@/validations/auth";
@@ -23,7 +23,7 @@ export default function AdminLoginPage() {
 
   async function onSubmit(values: LoginInput) {
     setServerError(null);
-    const result = await signIn("credentials", {
+    const result = await signIn("admin-credentials", {
       email: values.email,
       password: values.password,
       redirect: false,
@@ -34,16 +34,8 @@ export default function AdminLoginPage() {
       return;
     }
 
-    const sessionRes = await fetch("/api/auth/session");
-    const session = await sessionRes.json();
-
-    if (session?.user?.role !== "SUPER_ADMIN") {
-      await signOut({ redirect: false });
-      setServerError("This account does not have admin access.");
-      return;
-    }
-
-    router.push("/admin");
+    router.replace("/admin");
+    router.refresh();
   }
 
   return (
