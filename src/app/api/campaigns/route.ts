@@ -39,7 +39,6 @@ export async function POST(req: Request) {
       if (!input.permissionConfirmed) return Response.json({ error: "Confirm you have permission to contact these recipients." }, { status: 422 });
       const limit = await checkCampaignSendAllowed(user.id, allowed.length);
       if (!limit.allowed) return Response.json({ error: limit.reason }, { status: 422 });
-      if (process.env.VERCEL && (process.env.STORAGE_PROVIDER ?? "local") === "local" && input.attachmentIds.length) return Response.json({ error: "Attachments require S3 storage when deployed on Vercel." }, { status: 422 });
     }
     const campaign = await prisma.campaign.create({ data: {
       userId: user.id, name: input.name, subject: input.subject, previewText: input.previewText, senderName: input.senderName,

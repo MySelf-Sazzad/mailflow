@@ -22,6 +22,7 @@ async function processJob(data: CampaignRecipientJob) {
   const footer = `<p style="font-size:12px;color:#64748b;margin-top:32px">Sent with MailFlow. <a href="${appUrl}/unsubscribe/${recipient.id}?token=${token}">Unsubscribe</a></p>`;
   const html = mergeFields(recipient.campaign.htmlContent, merge) + footer;
   const attachments = await Promise.all(recipient.campaign.attachments.map(async ({ fileAsset }) => {
+    if (fileAsset.storageKey.startsWith("data:")) return { filename: fileAsset.fileName, content: fileAsset.storageKey.slice(5) };
     if ((process.env.STORAGE_PROVIDER ?? "local") === "local") {
       const content = await readFile(path.join(process.cwd(), ".data", "uploads", ...fileAsset.storageKey.split("/")));
       return { filename: fileAsset.fileName, content: content.toString("base64") };

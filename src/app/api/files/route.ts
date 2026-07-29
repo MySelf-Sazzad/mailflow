@@ -16,6 +16,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No file provided" }, { status: 400 });
   }
 
+  if (process.env.VERCEL && file.size > 4 * 1024 * 1024) {
+    return NextResponse.json(
+      { error: "The free Vercel attachment limit is 4 MB per file." },
+      { status: 422 }
+    );
+  }
+
   const typeCheck = validateAttachment({ type: file.type, size: file.size, name: file.name });
   if (!typeCheck.valid) {
     return NextResponse.json({ error: typeCheck.reason }, { status: 422 });
@@ -59,7 +66,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ file: asset }, { status: 201 });
+  return NextResponse.json({ file: { id: asset.id, fileName: asset.fileName, mimeType: asset.mimeType, sizeBytes: asset.sizeBytes } }, { status: 201 });
 }
 
 function sanitizeFileName(name: string) {
